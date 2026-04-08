@@ -1,0 +1,473 @@
+import { useState, useMemo } from “react”;
+
+const STAGES = [“Pleadings”,“Initial Disclosures”,“Document Production”,“Depositions”,“Expert Discovery”,“Dispositive Motions”,“Trial Prep”,“Closed”];
+const STAGE_COLORS = {“Pleadings”:”#6B8CFF”,“Initial Disclosures”:”#A78BFA”,“Document Production”:”#F59E0B”,“Depositions”:”#34D399”,“Expert Discovery”:”#F472B6”,“Dispositive Motions”:”#FB923C”,“Trial Prep”:”#EF4444”,“Closed”:”#6B7280”};
+const COUNTIES = [“Bronx”,“Brooklyn”,“Manhattan”,“Queens”,“Staten Island”,“Nassau”,“Suffolk”,“Westchester”,“Other”];
+const TYPES = [“Slip & Fall”,“Premises Liability”,“Medical Malpractice”,“Labor Law §240”,“Labor Law §241”,“Auto Accident”,“Municipal Liability”,“Construction Defect”,“Product Liability”,“Civil Rights §1983”,“Negligent Hiring”,“FELA / Railroad”,“Utility Negligence”,“Environmental Liability”,“Other”];
+const PARTNERS = [“J. Kessler”,“M. Okafor”,“S. Patel”,“Associate”,“Other”];
+const STAGE_ORDER = STAGES.reduce((a,s,i)=>{a[s]=i;return a},{});
+
+const SEED = [
+{id:“CVD-001”,caption:“Rivera v. Metro Transit Auth.”,type:“Slip & Fall”,partner:“J. Kessler”,stage:“Depositions”,priority:“High”,county:“Bronx”,nextDeadline:“2025-01-28”,courtDate:“2025-03-15”,nextAction:“Depose plaintiff’s treating physician”,pendingItems:[“Respond to discovery demands”,“Schedule expert IME”],openDate:“2023-12-01”,notes:””},
+{id:“CVD-002”,caption:“Chen v. Blackstone Realty LLC”,type:“Premises Liability”,partner:“M. Okafor”,stage:“Document Production”,priority:“High”,county:“Manhattan”,nextDeadline:“2025-02-03”,courtDate:“2025-04-22”,nextAction:“Produce building maintenance records”,pendingItems:[“HIPAA authorizations”,“Produce incident reports”],openDate:“2024-03-15”,notes:””},
+{id:“CVD-003”,caption:“Torres v. City of New York”,type:“Municipal Liability”,partner:“J. Kessler”,stage:“Expert Discovery”,priority:“Medium”,county:“Queens”,nextDeadline:“2025-02-14”,courtDate:“2025-06-10”,nextAction:“Exchange expert reports”,pendingItems:[“Expert report due”],openDate:“2023-07-20”,notes:””},
+{id:“CVD-004”,caption:“Williams v. St. Luke’s Hospital”,type:“Medical Malpractice”,partner:“S. Patel”,stage:“Depositions”,priority:“High”,county:“Manhattan”,nextDeadline:“2025-01-31”,courtDate:“2025-05-08”,nextAction:“Depose defendant surgeon”,pendingItems:[“CPLR 3101(d) exchange”,“Depose 2 more nurses”],openDate:“2023-04-10”,notes:””},
+{id:“CVD-005”,caption:“Johnson v. Apex Construction”,type:“Labor Law §240”,partner:“M. Okafor”,stage:“Dispositive Motions”,priority:“High”,county:“Brooklyn”,nextDeadline:“2025-01-24”,courtDate:“2025-02-28”,nextAction:“File MSJ opposition”,pendingItems:[“Opposition brief due 1/24”,“Reply to plaintiff motion”],openDate:“2023-01-05”,notes:””},
+{id:“CVD-006”,caption:“Martinez v. Allied Security Inc.”,type:“Negligent Hiring”,partner:“S. Patel”,stage:“Initial Disclosures”,priority:“Low”,county:“Bronx”,nextDeadline:“2025-03-01”,courtDate:“2025-09-15”,nextAction:“Serve initial disclosures”,pendingItems:[“Initial disclosures”],openDate:“2024-10-15”,notes:””},
+{id:“CVD-007”,caption:“Kim v. Park Slope Condo Assoc.”,type:“Premises Liability”,partner:“J. Kessler”,stage:“Document Production”,priority:“Medium”,county:“Brooklyn”,nextDeadline:“2025-02-10”,courtDate:“2025-05-20”,nextAction:“Respond to document demands”,pendingItems:[“Produce HOA records”,“Photograph premises”],openDate:“2024-06-01”,notes:””},
+{id:“CVD-008”,caption:“O’Brien v. NYC DOE”,type:“Civil Rights §1983”,partner:“M. Okafor”,stage:“Pleadings”,priority:“Low”,county:“Manhattan”,nextDeadline:“2025-02-20”,courtDate:“2025-11-01”,nextAction:“File answer to amended complaint”,pendingItems:[“Answer amended complaint”],openDate:“2024-12-07”,notes:””},
+{id:“CVD-009”,caption:“Patel v. Queens Med. Center”,type:“Medical Malpractice”,partner:“S. Patel”,stage:“Expert Discovery”,priority:“High”,county:“Queens”,nextDeadline:“2025-01-27”,courtDate:“2025-03-30”,nextAction:“Serve defense expert report”,pendingItems:[“Expert report overdue”,“CPLR 3101(d)”],openDate:“2023-06-01”,notes:””},
+{id:“CVD-010”,caption:“Goldstein v. Riverside Props.”,type:“Premises Liability”,partner:“J. Kessler”,stage:“Depositions”,priority:“Medium”,county:“Manhattan”,nextDeadline:“2025-02-05”,courtDate:“2025-04-15”,nextAction:“Depose property manager”,pendingItems:[“EBT of super”,“Produce repair logs”],openDate:“2024-02-20”,notes:””},
+{id:“CVD-011”,caption:“Davis v. FreshDirect LLC”,type:“Auto Accident”,partner:“M. Okafor”,stage:“Document Production”,priority:“Low”,county:“Bronx”,nextDeadline:“2025-03-15”,courtDate:“2025-07-10”,nextAction:“Produce driver logs & GPS data”,pendingItems:[“GPS/telematics data”,“Driver employment records”],openDate:“2024-07-20”,notes:””},
+{id:“CVD-012”,caption:“Nguyen v. Bellevue Hospital”,type:“Medical Malpractice”,partner:“S. Patel”,stage:“Trial Prep”,priority:“High”,county:“Manhattan”,nextDeadline:“2025-01-22”,courtDate:“2025-02-10”,nextAction:“Finalize trial exhibits & witness list”,pendingItems:[“Exhibit list”,“Motion in limine”,“Jury charge draft”],openDate:“2022-09-10”,notes:””},
+{id:“CVD-013”,caption:“Ramirez v. Bronx Zoo”,type:“Premises Liability”,partner:“J. Kessler”,stage:“Depositions”,priority:“Medium”,county:“Bronx”,nextDeadline:“2025-02-18”,courtDate:“2025-05-05”,nextAction:“Depose zoo security director”,pendingItems:[“Depose 2 witnesses”],openDate:“2024-04-10”,notes:””},
+{id:“CVD-014”,caption:“Burke v. LIRR”,type:“FELA / Railroad”,partner:“M. Okafor”,stage:“Expert Discovery”,priority:“High”,county:“Nassau”,nextDeadline:“2025-01-30”,courtDate:“2025-04-01”,nextAction:“Produce biomechanical expert report”,pendingItems:[“Expert report”,“Vocational rehab rebuttal”],openDate:“2023-10-15”,notes:””},
+{id:“CVD-015”,caption:“Santos v. Whole Foods Mkt.”,type:“Slip & Fall”,partner:“S. Patel”,stage:“Initial Disclosures”,priority:“Low”,county:“Manhattan”,nextDeadline:“2025-03-10”,courtDate:“2025-10-20”,nextAction:“Serve 26(a)(1) disclosures”,pendingItems:[“Initial disclosures”,“Preserve surveillance footage”],openDate:“2024-11-15”,notes:””},
+{id:“CVD-016”,caption:“Lee v. Consolidated Edison”,type:“Utility Negligence”,partner:“J. Kessler”,stage:“Dispositive Motions”,priority:“Medium”,county:“Queens”,nextDeadline:“2025-01-25”,courtDate:“2025-03-05”,nextAction:“Oral argument preparation”,pendingItems:[“Prepare for oral argument 1/25”],openDate:“2023-05-01”,notes:””},
+{id:“CVD-017”,caption:“Fernandez v. Atlas Moving Co.”,type:“Auto Accident”,partner:“M. Okafor”,stage:“Document Production”,priority:“Low”,county:“Brooklyn”,nextDeadline:“2025-02-28”,courtDate:“2025-08-14”,nextAction:“Produce CMV inspection records”,pendingItems:[“DOT inspection records”,“Driver hours of service”],openDate:“2024-07-15”,notes:””},
+{id:“CVD-018”,caption:“Hassan v. NYC Housing Auth.”,type:“Municipal Liability”,partner:“S. Patel”,stage:“Depositions”,priority:“High”,county:“Bronx”,nextDeadline:“2025-02-07”,courtDate:“2025-04-28”,nextAction:“Depose NYCHA maintenance crew”,pendingItems:[“3 depositions scheduled”,“Repair records outstanding”],openDate:“2024-01-10”,notes:””},
+{id:“CVD-019”,caption:“Thompson v. NYU Langone”,type:“Medical Malpractice”,partner:“J. Kessler”,stage:“Expert Discovery”,priority:“Medium”,county:“Manhattan”,nextDeadline:“2025-02-22”,courtDate:“2025-06-20”,nextAction:“Respond to plaintiff expert report”,pendingItems:[“Expert rebuttal report”],openDate:“2023-08-01”,notes:””},
+{id:“CVD-020”,caption:“Murphy v. Port Authority”,type:“Premises Liability”,partner:“M. Okafor”,stage:“Closed”,priority:“Low”,county:“Manhattan”,nextDeadline:null,courtDate:null,nextAction:“Case settled”,pendingItems:[],openDate:“2022-03-01”,notes:“Settled for $85k”},
+{id:“CVD-021”,caption:“Alvarez v. Fordham Univ.”,type:“Civil Rights §1983”,partner:“S. Patel”,stage:“Pleadings”,priority:“Medium”,county:“Bronx”,nextDeadline:“2025-02-15”,courtDate:“2025-12-01”,nextAction:“Answer complaint”,pendingItems:[“Answer due 2/15”],openDate:“2024-12-30”,notes:””},
+{id:“CVD-022”,caption:“Weinstein v. Park Ave. Co-op”,type:“Construction Defect”,partner:“J. Kessler”,stage:“Document Production”,priority:“Medium”,county:“Manhattan”,nextDeadline:“2025-02-12”,courtDate:“2025-06-05”,nextAction:“Produce board meeting minutes”,pendingItems:[“Board minutes”,“Architectural plans”],openDate:“2024-05-15”,notes:””},
+{id:“CVD-023”,caption:“Okonkwo v. Elmhurst Hosp.”,type:“Medical Malpractice”,partner:“M. Okafor”,stage:“Depositions”,priority:“High”,county:“Queens”,nextDeadline:“2025-01-29”,courtDate:“2025-03-18”,nextAction:“Depose plaintiff’s OB expert”,pendingItems:[“OB/GYN deposition”],openDate:“2023-07-01”,notes:””},
+{id:“CVD-024”,caption:“Clark v. Verizon NY Inc.”,type:“Labor Law §241”,partner:“S. Patel”,stage:“Expert Discovery”,priority:“Medium”,county:“Manhattan”,nextDeadline:“2025-02-20”,courtDate:“2025-05-25”,nextAction:“Exchange safety expert reports”,pendingItems:[“OSHA expert report”],openDate:“2024-01-15”,notes:””},
+{id:“CVD-025”,caption:“Reyes v. Starbucks Corp.”,type:“Premises Liability”,partner:“J. Kessler”,stage:“Initial Disclosures”,priority:“Low”,county:“Brooklyn”,nextDeadline:“2025-03-20”,courtDate:“2025-10-05”,nextAction:“Request incident reports”,pendingItems:[“Incident report FOIL request”],openDate:“2024-11-01”,notes:””},
+{id:“CVD-026”,caption:“Huang v. Queens Hosp. Ctr.”,type:“Medical Malpractice”,partner:“M. Okafor”,stage:“Dispositive Motions”,priority:“High”,county:“Queens”,nextDeadline:“2025-01-23”,courtDate:“2025-02-20”,nextAction:“File CPLR 3212 motion”,pendingItems:[“MSJ filing due 1/23”],openDate:“2023-02-10”,notes:””},
+{id:“CVD-027”,caption:“Patterson v. KeySpan Energy”,type:“Utility Negligence”,partner:“S. Patel”,stage:“Depositions”,priority:“Low”,county:“Brooklyn”,nextDeadline:“2025-02-25”,courtDate:“2025-06-15”,nextAction:“Depose field technician”,pendingItems:[“Field tech EBT”],openDate:“2024-03-20”,notes:””},
+{id:“CVD-028”,caption:“Morales v. BJ’s Wholesale”,type:“Slip & Fall”,partner:“J. Kessler”,stage:“Document Production”,priority:“Low”,county:“Bronx”,nextDeadline:“2025-03-05”,courtDate:“2025-07-22”,nextAction:“Produce cleaning logs”,pendingItems:[“Cleaning/maintenance logs”],openDate:“2024-07-01”,notes:””},
+{id:“CVD-029”,caption:“Walsh v. NYC Dept. of Sanit.”,type:“Municipal Liability”,partner:“M. Okafor”,stage:“Trial Prep”,priority:“High”,county:“Manhattan”,nextDeadline:“2025-01-24”,courtDate:“2025-02-18”,nextAction:“Submit JPTO”,pendingItems:[“JPTO due 1/24”,“Jury instructions”,“Voir dire outline”],openDate:“2022-11-01”,notes:””},
+{id:“CVD-030”,caption:“Diaz v. Harlem Children’s Zone”,type:“Negligent Hiring”,partner:“S. Patel”,stage:“Initial Disclosures”,priority:“Medium”,county:“Manhattan”,nextDeadline:“2025-03-12”,courtDate:“2025-09-30”,nextAction:“CPLR 3101 disclosures”,pendingItems:[“Witness list”,“Document disclosures”],openDate:“2024-09-20”,notes:””},
+];
+
+function uid() { return “CVD-” + Math.floor(Math.random()*900+100); }
+function today() { return new Date().toISOString().slice(0,10); }
+function daysUntil(ds) {
+if (!ds) return null;
+const t = new Date(); t.setHours(0,0,0,0);
+return Math.round((new Date(ds)-t)/86400000);
+}
+function urg(d) {
+if (d===null) return “none”;
+if (d<0) return “overdue”;
+if (d<=7) return “critical”;
+if (d<=21) return “warning”;
+return “ok”;
+}
+
+const URG_STYLE = {
+overdue:{bg:”#EF444422”,color:”#EF4444”},
+critical:{bg:”#F59E0B22”,color:”#F59E0B”},
+warning:{bg:”#6B8CFF22”,color:”#6B8CFF”},
+ok:{bg:”#34D39920”,color:”#34D399”},
+none:{bg:”#6B728020”,color:”#6B7280”},
+};
+
+function Badge({dateStr}) {
+const d=daysUntil(dateStr), u=urg(d);
+const s=URG_STYLE[u];
+if (d===null) return <span style={{...pill,background:s.bg,color:s.color}}>No deadline</span>;
+return <span style={{...pill,background:s.bg,color:s.color}}>{d<0?`${Math.abs(d)}d overdue`:d===0?“Today”:`${d}d`}</span>;
+}
+
+const pill={display:“inline-flex”,alignItems:“center”,borderRadius:3,fontSize:10,fontWeight:500,padding:“2px 7px”,letterSpacing:”.05em”,textTransform:“uppercase”};
+
+function emptyCase() {
+return {id:uid(),caption:””,type:“Premises Liability”,partner:“J. Kessler”,stage:“Pleadings”,priority:“Medium”,county:“Manhattan”,nextDeadline:””,courtDate:””,nextAction:””,pendingItems:[],openDate:today(),notes:””};
+}
+
+export default function App() {
+const [cases, setCases] = useState(SEED.map((c,i)=>({…c,_id:i+1})));
+const [nextId, setNextId] = useState(SEED.length+1);
+const [view, setView] = useState(“board”);
+const [search, setSearch] = useState(””);
+const [fStage, setFStage] = useState(“All”);
+const [fPartner, setFPartner] = useState(“All”);
+const [fUrg, setFUrg] = useState(“All”);
+const [sortBy, setSortBy] = useState(“deadline”);
+const [detail, setDetail] = useState(null);
+const [editing, setEditing] = useState(null);
+const [delTarget, setDelTarget] = useState(null);
+const [toast, setToast] = useState(null);
+
+function showToast(msg) { setToast(msg); setTimeout(()=>setToast(null),2800); }
+
+function saveCase(c) {
+if (c._id) {
+setCases(cs=>cs.map(x=>x._id===c._id?c:x));
+showToast(“✓ Case updated”);
+} else {
+const nc={…c,_id:nextId};
+setCases(cs=>[…cs,nc]);
+setNextId(n=>n+1);
+showToast(“✓ Case added”);
+}
+setEditing(null); setDetail(null);
+}
+
+function deleteCase(c) {
+setCases(cs=>cs.filter(x=>x._id!==c._id));
+setDelTarget(null); setDetail(null);
+showToast(“Case removed”);
+}
+
+const partners = useMemo(()=>[“All”,…new Set(cases.map(c=>c.partner).filter(Boolean))],[cases]);
+
+const filtered = useMemo(()=>{
+let cs=cases.filter(c=>{
+const q=search.toLowerCase();
+const ms=!q||[c.caption,c.id,c.type,c.county,c.partner].some(x=>(x||””).toLowerCase().includes(q));
+const ms2=fStage===“All”||c.stage===fStage;
+const mp=fPartner===“All”||c.partner===fPartner;
+const d=daysUntil(c.nextDeadline),u=urg(d);
+const mu=fUrg===“All”||(fUrg===“Overdue”&&u===“overdue”)||(fUrg===“This Week”&&u===“critical”&&d>=0)||(fUrg===“This Month”&&u===“warning”)||(fUrg===“High Priority”&&c.priority===“High”);
+return ms&&ms2&&mp&μ
+});
+cs.sort((a,b)=>{
+if(sortBy===“deadline”){const da=a.nextDeadline?daysUntil(a.nextDeadline):9999,db=b.nextDeadline?daysUntil(b.nextDeadline):9999;return da-db;}
+if(sortBy===“stage”)return STAGE_ORDER[a.stage]-STAGE_ORDER[b.stage];
+if(sortBy===“priority”)return ({High:3,Medium:2,Low:1}[b.priority]||0)-({High:3,Medium:2,Low:1}[a.priority]||0);
+return 0;
+});
+return cs;
+},[cases,search,fStage,fPartner,fUrg,sortBy]);
+
+const stats = useMemo(()=>({
+active:cases.filter(c=>c.stage!==“Closed”).length,
+overdue:cases.filter(c=>{const d=daysUntil(c.nextDeadline);return d!==null&&d<0&&c.stage!==“Closed”;}).length,
+week:cases.filter(c=>{const d=daysUntil(c.nextDeadline);return d!==null&&d>=0&&d<=7;}).length,
+trial:cases.filter(c=>c.stage===“Trial Prep”).length,
+}),[cases]);
+
+const B = ({label,active,onClick,color})=>(
+<button onClick={onClick} style={{background:active?(color||”#C8A84B”)+“18”:”#111318”,border:`1px solid ${active?(color||"#C8A84B"):"#2A2D38"}`,color:active?(color||”#C8A84B”):”#8892A0”,padding:“5px 11px”,borderRadius:3,cursor:“pointer”,fontFamily:”‘DM Mono’,monospace”,fontSize:11,letterSpacing:”.04em”,transition:“all .12s”,display:“inline-flex”,alignItems:“center”,gap:5}}>
+{label}
+</button>
+);
+
+return (
+<div style={{fontFamily:”‘DM Mono’,‘Courier New’,monospace”,background:”#0D0F14”,minHeight:“100vh”,color:”#C8CDD8”,fontSize:13}}>
+<style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:wght@700;900&display=swap'); *{box-sizing:border-box;margin:0;padding:0} ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:#111318} ::-webkit-scrollbar-thumb{background:#2A2D38;border-radius:3px} input,select,textarea{background:#0D0F14!important;border:1px solid #2A2D38!important;color:#C8CDD8!important;padding:8px 11px!important;border-radius:3px!important;font-family:'DM Mono',monospace!important;font-size:12px!important;outline:none!important;width:100%!important;transition:border-color .12s!important} input:focus,select:focus,textarea:focus{border-color:#C8A84B!important} .row:hover{background:#161820!important}`}</style>
+
+```
+  {/* HEADER */}
+  <div style={{background:"#090B0F",borderBottom:"1px solid #1E2029",padding:"0 18px",position:"sticky",top:0,zIndex:50}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:52}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:5,height:28,background:"#C8A84B",borderRadius:2}}/>
+        <div>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,color:"#E8DFC0",letterSpacing:".02em"}}>DISCOVERY TRACKER</div>
+          <div style={{fontSize:9,color:"#6B7280",letterSpacing:".1em"}}>CIVIL DEFENSE · NEW YORK</div>
+        </div>
+        <div style={{width:1,height:24,background:"#1E2029",margin:"0 6px"}}/>
+        {["board","list","agenda"].map(v=>(
+          <button key={v} onClick={()=>setView(v)} style={{background:"none",border:"none",borderBottom:`2px solid ${view===v?"#C8A84B":"transparent"}`,color:view===v?"#C8A84B":"#8892A0",padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10,letterSpacing:".08em",textTransform:"uppercase",transition:"all .12s"}}>
+            {v}
+          </button>
+        ))}
+      </div>
+      <button onClick={()=>setEditing(emptyCase())} style={{background:"#C8A84B",border:"none",color:"#0D0F14",padding:"7px 16px",borderRadius:3,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:500,letterSpacing:".05em"}}>
+        + New Case
+      </button>
+    </div>
+  </div>
+
+  <div style={{padding:"16px 18px",maxWidth:1600,margin:"0 auto"}}>
+
+    {/* STATS */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+      {[{l:"Active Cases",v:stats.active,s:`of ${cases.length} total`,c:"#6B8CFF"},{l:"Overdue",v:stats.overdue,s:"past deadline",c:"#EF4444"},{l:"Due This Week",v:stats.week,s:"within 7 days",c:"#F59E0B"},{l:"Trial Prep",v:stats.trial,s:"imminent trials",c:"#EF4444"}].map(s=>(
+        <div key={s.l} style={{background:"#111318",border:"1px solid #1E2029",borderRadius:5,padding:"13px 16px"}}>
+          <div style={{fontSize:9,color:"#6B7280",letterSpacing:".1em",marginBottom:5}}>{s.l.toUpperCase()}</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+            <span style={{fontFamily:"'Playfair Display',serif",fontSize:30,color:s.c,lineHeight:1}}>{s.v}</span>
+            <span style={{fontSize:10,color:"#6B7280"}}>{s.s}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* FILTERS */}
+    <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:8,alignItems:"center"}}>
+      <input placeholder="Search caption, type, county…" value={search} onChange={e=>setSearch(e.target.value)} style={{width:210}}/>
+      <select value={fPartner} onChange={e=>setFPartner(e.target.value)} style={{width:130}}>
+        {partners.map(p=><option key={p}>{p}</option>)}
+      </select>
+      {["All","Overdue","This Week","High Priority"].map(u=><B key={u} label={u} active={fUrg===u} onClick={()=>setFUrg(u)}/>)}
+      <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}>
+        <span style={{fontSize:9,color:"#6B7280",letterSpacing:".1em"}}>SORT</span>
+        {["deadline","stage","priority"].map(s=><B key={s} label={s} active={sortBy===s} onClick={()=>setSortBy(s)}/>)}
+      </div>
+    </div>
+
+    {/* STAGE CHIPS */}
+    <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:16}}>
+      <B label="All Stages" active={fStage==="All"} onClick={()=>setFStage("All")}/>
+      {STAGES.map(s=>{
+        const cnt=cases.filter(c=>c.stage===s).length;
+        return <B key={s} label={<><span style={{width:6,height:6,background:STAGE_COLORS[s],borderRadius:"50%",display:"inline-block"}}/>{s} <span style={{opacity:.6}}>{cnt}</span></>} active={fStage===s} onClick={()=>setFStage(s)} color={STAGE_COLORS[s]}/>;
+      })}
+    </div>
+
+    {/* VIEWS */}
+    {view==="board" && <BoardView cases={filtered} onSelect={setDetail}/>}
+    {view==="list"  && <ListView  cases={filtered} onSelect={setDetail}/>}
+    {view==="agenda"&& <AgendaView cases={filtered} onSelect={setDetail}/>}
+  </div>
+
+  {detail    && <DetailModal c={detail} onClose={()=>setDetail(null)} onEdit={()=>{setEditing({...detail});setDetail(null);}} onDelete={()=>setDelTarget(detail)}/>}
+  {editing   && <CaseForm initial={editing} onSave={saveCase} onClose={()=>setEditing(null)}/>}
+  {delTarget && <ConfirmDel c={delTarget} onConfirm={()=>deleteCase(delTarget)} onCancel={()=>setDelTarget(null)}/>}
+  {toast && <div style={{position:"fixed",bottom:20,right:20,background:"#1A1E28",border:"1px solid #2A2D38",borderRadius:4,padding:"11px 16px",fontSize:12,color:"#C8CDD8",zIndex:999}}>{toast}</div>}
+</div>
+```
+
+);
+}
+
+// ── BOARD ─────────────────────────────────────────────────────────────────────
+function BoardView({cases,onSelect}) {
+const groups = useMemo(()=>{ const g={}; STAGES.forEach(s=>{g[s]=[];}); cases.forEach(c=>{if(g[c.stage])g[c.stage].push(c);}); return g; },[cases]);
+return (
+<div style={{display:“flex”,gap:9,overflowX:“auto”,paddingBottom:12}}>
+{STAGES.map(stage=>(
+<div key={stage} style={{background:”#111318”,border:“1px solid #1E2029”,borderRadius:5,minWidth:195,width:195,flexShrink:0}}>
+<div style={{padding:“8px 10px”,borderBottom:“1px solid #1E2029”,display:“flex”,alignItems:“center”,justifyContent:“space-between”}}>
+<div style={{display:“flex”,alignItems:“center”,gap:6}}>
+<div style={{width:7,height:7,borderRadius:“50%”,background:STAGE_COLORS[stage]}}/>
+<span style={{fontSize:9,letterSpacing:”.07em”,color:”#C8CDD8”}}>{stage.toUpperCase()}</span>
+</div>
+<span style={{fontSize:11,color:”#6B7280”}}>{groups[stage].length}</span>
+</div>
+<div style={{padding:“6px 0”,maxHeight:“calc(100vh - 310px)”,overflowY:“auto”}}>
+{groups[stage].length===0 && <div style={{padding:12,fontSize:10,color:”#6B7280”,textAlign:“center”}}>—</div>}
+{groups[stage].map(c=>(
+<div key={c._id} onClick={()=>onSelect(c)} style={{background:”#161820”,border:“1px solid #1E2029”,borderRadius:3,margin:“0 7px 7px”,padding:“9px 10px”,cursor:“pointer”,transition:“all .1s”}}
+onMouseEnter={e=>{e.currentTarget.style.borderColor=”#C8A84B55”;e.currentTarget.style.background=”#1A1E28”}}
+onMouseLeave={e=>{e.currentTarget.style.borderColor=”#1E2029”;e.currentTarget.style.background=”#161820”}}>
+<div style={{fontSize:9,color:”#6B7280”,marginBottom:3}}>{c.id} · {c.county}</div>
+<div style={{fontSize:11,color:”#C8CDD8”,lineHeight:1.4,marginBottom:4}}>{c.caption}</div>
+<div style={{fontSize:9,color:”#8892A0”,marginBottom:5}}>{c.type}</div>
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”}}>
+<Badge dateStr={c.nextDeadline}/>
+<span style={{fontSize:9,color:c.priority===“High”?”#EF4444”:c.priority===“Medium”?”#F59E0B”:”#6B7280”}}>{c.priority===“High”?“●HI”:c.priority===“Medium”?“●MD”:“○LO”}</span>
+</div>
+{c.nextAction&&<div style={{marginTop:5,fontSize:9,color:”#8892A0”,borderTop:“1px solid #1E2029”,paddingTop:4}}>↳ {c.nextAction.slice(0,48)}</div>}
+</div>
+))}
+</div>
+</div>
+))}
+</div>
+);
+}
+
+// ── LIST ──────────────────────────────────────────────────────────────────────
+function ListView({cases,onSelect}) {
+const C=“85px 1fr 150px 105px 80px 85px 85px 65px”;
+return (
+<div style={{border:“1px solid #1E2029”,borderRadius:5,overflow:“hidden”}}>
+<div style={{display:“grid”,gridTemplateColumns:C,padding:“6px 13px”,background:”#111318”,borderBottom:“1px solid #1E2029”}}>
+{[“ID”,“Caption”,“Next Action”,“Deadline”,“Stage”,“Partner”,“County”,“Priority”].map(h=>(
+<div key={h} style={{fontSize:9,letterSpacing:”.1em”,color:”#6B7280”}}>{h.toUpperCase()}</div>
+))}
+</div>
+<div style={{maxHeight:“calc(100vh - 340px)”,overflowY:“auto”}}>
+{cases.length===0&&<div style={{padding:20,textAlign:“center”,color:”#6B7280”,fontSize:12}}>No cases match filters.</div>}
+{cases.map((c,i)=>(
+<div key={c._id} className=“row” onClick={()=>onSelect(c)} style={{display:“grid”,gridTemplateColumns:C,padding:“9px 13px”,borderBottom:“1px solid #1A1D26”,background:i%2===0?”#0D0F14”:”#111318”,alignItems:“center”,cursor:“pointer”,transition:“background .1s”}}>
+<div style={{fontSize:10,color:”#C8A84B”}}>{c.id}</div>
+<div><div style={{fontSize:11,color:”#C8CDD8”,marginBottom:1}}>{c.caption}</div><div style={{fontSize:9,color:”#6B7280”}}>{c.type}</div></div>
+<div style={{fontSize:10,color:”#8892A0”}}>{(c.nextAction||””).slice(0,40)}{(c.nextAction||””).length>40?”…”:””}</div>
+<div><Badge dateStr={c.nextDeadline}/></div>
+<div><span style={{fontSize:9,padding:“2px 6px”,borderRadius:2,background:STAGE_COLORS[c.stage]+“22”,color:STAGE_COLORS[c.stage]}}>{c.stage.slice(0,9)}</span></div>
+<div style={{fontSize:10,color:”#8892A0”}}>{c.partner}</div>
+<div style={{fontSize:10,color:”#8892A0”}}>{c.county}</div>
+<div style={{fontSize:10,color:c.priority===“High”?”#EF4444”:c.priority===“Medium”?”#F59E0B”:”#6B7280”}}>{c.priority}</div>
+</div>
+))}
+</div>
+</div>
+);
+}
+
+// ── AGENDA ────────────────────────────────────────────────────────────────────
+function AgendaView({cases,onSelect}) {
+const sorted=cases.filter(c=>c.nextDeadline).sort((a,b)=>new Date(a.nextDeadline)-new Date(b.nextDeadline));
+const grouped={};
+sorted.forEach(c=>{
+const d=daysUntil(c.nextDeadline);
+const k=d<0?“⚠ OVERDUE”:d===0?“TODAY”:d<=7?“THIS WEEK”:d<=14?“NEXT WEEK”:d<=31?“THIS MONTH”:“LATER”;
+if(!grouped[k])grouped[k]=[];
+grouped[k].push(c);
+});
+const ORDER=[“⚠ OVERDUE”,“TODAY”,“THIS WEEK”,“NEXT WEEK”,“THIS MONTH”,“LATER”];
+const GC={“⚠ OVERDUE”:”#EF4444”,“TODAY”:”#F59E0B”,“THIS WEEK”:”#F59E0B”,“NEXT WEEK”:”#6B8CFF”,“THIS MONTH”:”#A78BFA”,“LATER”:”#6B7280”};
+return (
+<div style={{maxWidth:860}}>
+{ORDER.filter(k=>grouped[k]).map(k=>(
+<div key={k} style={{marginBottom:20}}>
+<div style={{display:“flex”,alignItems:“center”,gap:8,marginBottom:8}}>
+<div style={{height:1,width:18,background:GC[k]}}/>
+<span style={{fontSize:10,letterSpacing:”.12em”,color:GC[k],fontWeight:500}}>{k}</span>
+<div style={{height:1,flex:1,background:”#1E2029”}}/>
+<span style={{fontSize:10,color:”#6B7280”}}>{grouped[k].length}</span>
+</div>
+{grouped[k].map(c=>(
+<div key={c._id} onClick={()=>onSelect(c)} style={{background:”#111318”,border:`1px solid #1E2029`,borderLeft:`3px solid ${STAGE_COLORS[c.stage]}`,borderRadius:4,marginBottom:5,padding:“10px 13px”,display:“grid”,gridTemplateColumns:“80px 1fr auto”,gap:12,alignItems:“start”,cursor:“pointer”,transition:“background .1s”}}
+onMouseEnter={e=>e.currentTarget.style.background=”#161820”}
+onMouseLeave={e=>e.currentTarget.style.background=”#111318”}>
+<div>
+<div style={{fontSize:9,color:”#C8A84B”}}>{c.id}</div>
+<div style={{fontSize:9,color:”#6B7280”,marginTop:2}}>{c.nextDeadline}</div>
+</div>
+<div>
+<div style={{fontSize:12,color:”#C8CDD8”,marginBottom:3}}>{c.caption}</div>
+{c.nextAction&&<div style={{fontSize:10,color:”#8892A0”,marginBottom:5}}>↳ {c.nextAction}</div>}
+{c.pendingItems.length>0&&<div style={{display:“flex”,gap:5,flexWrap:“wrap”}}>{c.pendingItems.map((x,i)=><span key={i} style={{fontSize:9,background:”#1A1E28”,border:“1px solid #2A2D38”,borderRadius:2,padding:“2px 6px”,color:”#8892A0”}}>{x}</span>)}</div>}
+</div>
+<div style={{textAlign:“right”}}>
+<span style={{fontSize:9,padding:“2px 7px”,borderRadius:2,background:STAGE_COLORS[c.stage]+“22”,color:STAGE_COLORS[c.stage],display:“block”,marginBottom:4}}>{c.stage}</span>
+<span style={{fontSize:9,color:”#6B7280”}}>{c.partner}</span>
+</div>
+</div>
+))}
+</div>
+))}
+{sorted.length===0&&<div style={{textAlign:“center”,color:”#6B7280”,padding:32,fontSize:12}}>No upcoming deadlines.</div>}
+</div>
+);
+}
+
+// ── DETAIL MODAL ──────────────────────────────────────────────────────────────
+function DetailModal({c,onClose,onEdit,onDelete}) {
+const d=daysUntil(c.nextDeadline);
+const Btn=({label,onClick,danger})=>(
+<button onClick={onClick} style={{background:danger?”#EF444412”:”#161820”,border:`1px solid ${danger?"#EF444440":"#2A2D38"}`,color:danger?”#EF4444”:”#C8CDD8”,padding:“6px 13px”,borderRadius:3,cursor:“pointer”,fontFamily:”‘DM Mono’,monospace”,fontSize:11,letterSpacing:”.04em”}}>{label}</button>
+);
+return (
+<div onClick={onClose} style={{position:“fixed”,inset:0,background:“rgba(0,0,0,.75)”,zIndex:200,display:“flex”,alignItems:“center”,justifyContent:“center”,padding:16}}>
+<div onClick={e=>e.stopPropagation()} style={{background:”#111318”,border:“1px solid #2A2D38”,borderRadius:6,width:“100%”,maxWidth:600,maxHeight:“88vh”,overflowY:“auto”,padding:26}}>
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“flex-start”,marginBottom:16}}>
+<div>
+<div style={{fontSize:9,color:”#C8A84B”,letterSpacing:”.1em”,marginBottom:4}}>{c.id} · {c.county} · {c.type}</div>
+<div style={{fontFamily:”‘Playfair Display’,serif”,fontSize:17,color:”#E8DFC0”,lineHeight:1.3}}>{c.caption}</div>
+</div>
+<div style={{display:“flex”,gap:6,marginLeft:12,flexShrink:0}}>
+<Btn label="Edit" onClick={onEdit}/>
+<Btn label="Delete" onClick={onDelete} danger/>
+<button onClick={onClose} style={{background:“none”,border:“none”,color:”#6B7280”,cursor:“pointer”,fontSize:20,lineHeight:1}}>×</button>
+</div>
+</div>
+<div style={{display:“grid”,gridTemplateColumns:“1fr 1fr”,gap:7,marginBottom:14}}>
+{[
+{l:“Stage”,v:c.stage,col:STAGE_COLORS[c.stage]},
+{l:“Priority”,v:c.priority,col:c.priority===“High”?”#EF4444”:c.priority===“Medium”?”#F59E0B”:”#6B7280”},
+{l:“Partner”,v:c.partner,col:”#C8CDD8”},
+{l:“Date Opened”,v:c.openDate||”—”,col:”#C8CDD8”},
+{l:“Next Deadline”,v:c.nextDeadline||”—”,col:d!==null&&d<0?”#EF4444”:d!==null&&d<=7?”#F59E0B”:”#34D399”},
+{l:“Court Date”,v:c.courtDate||“TBD”,col:”#C8CDD8”},
+].map(r=>(
+<div key={r.l} style={{background:”#0D0F14”,border:“1px solid #1E2029”,borderRadius:3,padding:“8px 11px”}}>
+<div style={{fontSize:9,color:”#6B7280”,letterSpacing:”.1em”,marginBottom:2}}>{r.l.toUpperCase()}</div>
+<div style={{fontSize:12,color:r.col,fontWeight:500}}>{r.v}</div>
+</div>
+))}
+</div>
+{c.nextAction&&<div style={{marginBottom:12}}>
+<div style={{fontSize:9,color:”#6B7280”,letterSpacing:”.1em”,marginBottom:5}}>NEXT ACTION</div>
+<div style={{background:”#0D0F14”,borderLeft:“3px solid #C8A84B”,border:“1px solid #C8A84B33”,borderRadius:3,padding:“9px 11px”,fontSize:12,color:”#C8CDD8”}}>{c.nextAction}</div>
+</div>}
+{c.pendingItems.length>0&&<div style={{marginBottom:12}}>
+<div style={{fontSize:9,color:”#6B7280”,letterSpacing:”.1em”,marginBottom:5}}>PENDING ITEMS</div>
+{c.pendingItems.map((x,i)=>(
+<div key={i} style={{display:“flex”,alignItems:“center”,gap:8,background:”#0D0F14”,border:“1px solid #1E2029”,borderRadius:3,padding:“6px 11px”,marginBottom:3}}>
+<div style={{width:11,height:11,border:“1px solid #2A2D38”,borderRadius:2,flexShrink:0}}/>
+<span style={{fontSize:11,color:”#C8CDD8”}}>{x}</span>
+</div>
+))}
+</div>}
+{c.notes&&<div style={{marginBottom:12}}>
+<div style={{fontSize:9,color:”#6B7280”,letterSpacing:”.1em”,marginBottom:5}}>NOTES</div>
+<div style={{background:”#0D0F14”,border:“1px solid #1E2029”,borderRadius:3,padding:“9px 11px”,fontSize:11,color:”#8892A0”,lineHeight:1.7,whiteSpace:“pre-wrap”}}>{c.notes}</div>
+</div>}
+<div style={{marginTop:14}}>
+<div style={{fontSize:9,color:”#6B7280”,letterSpacing:”.1em”,marginBottom:5}}>DISCOVERY PROGRESS</div>
+<div style={{display:“flex”,gap:3}}>
+{STAGES.filter(s=>s!==“Closed”).map(s=>{
+const idx=STAGE_ORDER[s],cur=STAGE_ORDER[c.stage],isA=s===c.stage,isPast=idx<cur;
+return <div key={s} style={{flex:1}}><div style={{height:3,borderRadius:2,background:isA?STAGE_COLORS[s]:isPast?STAGE_COLORS[s]+“55”:”#1E2029”}}/>{isA&&<div style={{fontSize:7,color:STAGE_COLORS[s],marginTop:2,textAlign:“center”}}>{s}</div>}</div>;
+})}
+</div>
+</div>
+</div>
+</div>
+);
+}
+
+// ── CASE FORM ─────────────────────────────────────────────────────────────────
+function CaseForm({initial,onSave,onClose}) {
+const [f,setF]=useState({…initial,pendingItems:Array.isArray(initial.pendingItems)?initial.pendingItems.join(”\n”):initial.pendingItems||””});
+const s=(k,v)=>setF(x=>({…x,[k]:v}));
+const [saving,setSaving]=useState(false);
+const submit=async()=>{
+if(!f.caption.trim()){alert(“Caption is required.”);return;}
+setSaving(true);
+await onSave({…f,pendingItems:f.pendingItems.split(”\n”).filter(Boolean)});
+setSaving(false);
+};
+const Label=({t})=><label style={{fontSize:9,letterSpacing:”.1em”,color:”#6B7280”,display:“block”,marginBottom:5}}>{t}</label>;
+const Row=({children,cols=1})=><div style={{display:“grid”,gridTemplateColumns:`repeat(${cols},1fr)`,gap:11,marginBottom:12}}>{children}</div>;
+const Btn=({label,primary,onClick,disabled})=>(
+<button onClick={onClick} disabled={disabled} style={{background:primary?”#C8A84B”:”#161820”,border:`1px solid ${primary?"#C8A84B":"#2A2D38"}`,color:primary?”#0D0F14”:”#C8CDD8”,padding:“7px 16px”,borderRadius:3,cursor:“pointer”,fontFamily:”‘DM Mono’,monospace”,fontSize:11,letterSpacing:”.05em”,fontWeight:primary?500:400}}>
+{label}
+</button>
+);
+return (
+<div onClick={onClose} style={{position:“fixed”,inset:0,background:“rgba(0,0,0,.75)”,zIndex:200,display:“flex”,alignItems:“center”,justifyContent:“center”,padding:16}}>
+<div onClick={e=>e.stopPropagation()} style={{background:”#111318”,border:“1px solid #2A2D38”,borderRadius:6,width:“100%”,maxWidth:660,maxHeight:“90vh”,overflowY:“auto”,padding:26}}>
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”,marginBottom:18}}>
+<div style={{fontFamily:”‘Playfair Display’,serif”,fontSize:15,color:”#E8DFC0”}}>{initial._id?“Edit Case”:“New Case”}</div>
+<button onClick={onClose} style={{background:“none”,border:“none”,color:”#6B7280”,cursor:“pointer”,fontSize:20}}>×</button>
+</div>
+<Row cols={2}><div><Label t="CASE ID"/><input value={f.id} onChange={e=>s(“id”,e.target.value)}/></div><div><Label t="CAPTION (STYLE) *"/><input value={f.caption} onChange={e=>s(“caption”,e.target.value)} placeholder=“Smith v. Acme Corp.”/></div></Row>
+<Row cols={3}>
+<div><Label t="CASE TYPE"/><select value={f.type} onChange={e=>s(“type”,e.target.value)}>{TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+<div><Label t="COUNTY"/><select value={f.county} onChange={e=>s(“county”,e.target.value)}>{COUNTIES.map(c=><option key={c}>{c}</option>)}</select></div>
+<div><Label t="PARTNER"/><select value={f.partner} onChange={e=>s(“partner”,e.target.value)}>{PARTNERS.map(p=><option key={p}>{p}</option>)}</select></div>
+</Row>
+<Row cols={3}>
+<div><Label t="STAGE"/><select value={f.stage} onChange={e=>s(“stage”,e.target.value)}>{STAGES.map(st=><option key={st}>{st}</option>)}</select></div>
+<div><Label t="PRIORITY"/><select value={f.priority} onChange={e=>s(“priority”,e.target.value)}>{[“High”,“Medium”,“Low”].map(p=><option key={p}>{p}</option>)}</select></div>
+<div><Label t="DATE OPENED"/><input type=“date” value={f.openDate||””} onChange={e=>s(“openDate”,e.target.value)}/></div>
+</Row>
+<Row cols={2}><div><Label t="NEXT DEADLINE"/><input type=“date” value={f.nextDeadline||””} onChange={e=>s(“nextDeadline”,e.target.value)}/></div><div><Label t="COURT DATE"/><input type=“date” value={f.courtDate||””} onChange={e=>s(“courtDate”,e.target.value)}/></div></Row>
+<Row><div><Label t="NEXT ACTION"/><input value={f.nextAction} onChange={e=>s(“nextAction”,e.target.value)} placeholder=“e.g. Depose plaintiff’s treating physician”/></div></Row>
+<Row><div><Label t="PENDING ITEMS (one per line)"/><textarea value={f.pendingItems} onChange={e=>s(“pendingItems”,e.target.value)} rows={4} placeholder={“Respond to discovery demands\nSchedule expert IME”}/></div></Row>
+<Row><div><Label t="NOTES"/><textarea value={f.notes||””} onChange={e=>s(“notes”,e.target.value)} rows={3} placeholder=“Internal notes, strategy, settlement posture…”/></div></Row>
+<div style={{display:“flex”,gap:8,justifyContent:“flex-end”}}>
+<Btn label="Cancel" onClick={onClose}/>
+<Btn label={saving?“Saving…”:“Save Case”} primary onClick={submit} disabled={saving}/>
+</div>
+</div>
+</div>
+);
+}
+
+// ── CONFIRM DELETE ────────────────────────────────────────────────────────────
+function ConfirmDel({c,onConfirm,onCancel}) {
+return (
+<div onClick={onCancel} style={{position:“fixed”,inset:0,background:“rgba(0,0,0,.75)”,zIndex:300,display:“flex”,alignItems:“center”,justifyContent:“center”,padding:16}}>
+<div onClick={e=>e.stopPropagation()} style={{background:”#111318”,border:“1px solid #2A2D38”,borderRadius:6,padding:28,maxWidth:400,width:“100%”,textAlign:“center”}}>
+<div style={{fontSize:28,marginBottom:10}}>⚠</div>
+<div style={{fontFamily:”‘Playfair Display’,serif”,fontSize:15,color:”#E8DFC0”,marginBottom:6}}>Delete this case?</div>
+<div style={{fontSize:12,color:”#8892A0”,marginBottom:16}}>{c.caption}<br/><span style={{color:”#6B7280”}}>{c.id}</span></div>
+<div style={{fontSize:11,color:”#EF4444”,background:”#EF444412”,border:“1px solid #EF444430”,borderRadius:3,padding:“8px 12px”,marginBottom:16}}>This removes the record from the dashboard.</div>
+<div style={{display:“flex”,gap:8,justifyContent:“center”}}>
+<button onClick={onCancel} style={{background:”#161820”,border:“1px solid #2A2D38”,color:”#C8CDD8”,padding:“7px 16px”,borderRadius:3,cursor:“pointer”,fontFamily:”‘DM Mono’,monospace”,fontSize:11}}>Cancel</button>
+<button onClick={onConfirm} style={{background:”#EF444412”,border:“1px solid #EF444440”,color:”#EF4444”,padding:“7px 16px”,borderRadius:3,cursor:“pointer”,fontFamily:”‘DM Mono’,monospace”,fontSize:11}}>Delete</button>
+</div>
+</div>
+</div>
+);
+}
